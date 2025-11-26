@@ -6,6 +6,7 @@ from datasets import load_from_disk
 from loguru import logger
 import time
 import traceback
+import soundfile as sf
 import torchaudio
 from pathlib import Path
 import re
@@ -398,7 +399,8 @@ class Text2MusicDataset(Dataset):
         filename = item["filename"]
         sr = 48000
         try:
-            audio, sr = torchaudio.load(filename)
+            audio_np, sr = sf.read(filename, dtype="float32", always_2d=True)
+            audio = torch.from_numpy(audio_np.T)  # (channels, frames)
         except Exception as e:
             logger.error(f"Failed to load audio {item}: {e}")
             return None

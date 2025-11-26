@@ -12,6 +12,7 @@ import os
 import re
 
 import torch
+import soundfile as sf
 from loguru import logger
 from tqdm import tqdm
 import json
@@ -46,7 +47,6 @@ from acestep.apg_guidance import (
     cfg_zero_star,
     cfg_double_condition_forward,
 )
-import torchaudio
 from .cpu_offload import cpu_offload
 
 
@@ -1393,13 +1393,23 @@ class ACEStepPipeline:
                 output_path_wav = save_path
 
         target_wav = target_wav.float()
-        backend = "soundfile"
-        if format == "ogg":
-            backend = "sox"
-        logger.info(f"Saving audio to {output_path_wav} using backend {backend}")
-        torchaudio.save(
-            output_path_wav, target_wav, sample_rate=sample_rate, format=format, backend=backend
-        )
+        format = format.lower()
+
+        # Avoid torchcodec dependency in torchaudio by using soundfile for common formats.
+        if format in {"wav", "flac", "ogg"}:
+            audio_np = target_wav.detach().cpu().numpy()
+            if audio_np.ndim == 2 and audio_np.shape[0] < audio_np.shape[1]:
+                audio_np = audio_np.T  # Convert (channels, frames) to (frames, channels)
+            logger.info(f"Saving audio to {output_path_wav} using soundfile for format={format}")
+            sf.write(output_path_wav, audio_np, samplerate=sample_rate, format=format)
+        elif format == "mp3":
+            # torchcodec-backed MP3 saving fails without FFmpeg; surface a clear error.
+            raise RuntimeError(
+                "MP3 export is not supported in the current environment (torchcodec/FFmpeg missing). "
+                "Use wav/flac/ogg, or install FFmpeg and a compatible torchcodec build."
+            )
+        else:
+            raise ValueError(f"Unsupported audio format: {format}")
         return output_path_wav
 
     @cpu_offload("music_dcae")

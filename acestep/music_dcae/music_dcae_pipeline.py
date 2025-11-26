@@ -9,6 +9,7 @@ Apache 2.0 License
 import os
 import torch
 from diffusers import AutoencoderDC
+import soundfile as sf
 import torchaudio
 import torchvision.transforms as transforms
 from diffusers.models.modeling_utils import ModelMixin
@@ -60,7 +61,8 @@ class MusicDCAE(ModelMixin, ConfigMixin, FromOriginalModelMixin):
         self.shift_factor = -1.9091
 
     def load_audio(self, audio_path):
-        audio, sr = torchaudio.load(audio_path)
+        audio_np, sr = sf.read(audio_path, dtype="float32", always_2d=True)
+        audio = torch.from_numpy(audio_np.T)  # (channels, frames)
         if audio.shape[0] == 1:
             audio = audio.repeat(2, 1)
         return audio, sr
